@@ -25,6 +25,8 @@ public class BeastTracker : MonoBehaviour
     [SerializeField, Min(0.1f)] private float minimumMoveWait = 2f;
     [SerializeField, Min(0.1f)] private float maximumMoveWait = 5f;
     [SerializeField, Min(0.1f)] private float lightDuration = 6f;
+    [Tooltip("How many different nodes may be lit at once. Active timers cannot be refreshed.")]
+    [SerializeField, Min(1)] private int maximumActiveLights = 1;
     [SerializeField] private bool startAutomatically = true;
 
     [Header("Optional visual markers; can be assigned later")]
@@ -178,6 +180,14 @@ public class BeastTracker : MonoBehaviour
             return false;
         if (requireTrackerView &&
             (brain.IsBlending || brain.ActiveVirtualCamera != trackerCamera))
+            return false;
+
+        // Clicking a lit node never refreshes its timer, even with spare capacity.
+        if (lightExpiry.ContainsKey(node))
+            return false;
+
+        // Each expired light frees one slot. Existing lights keep their timers.
+        if (lightExpiry.Count >= Mathf.Max(1, maximumActiveLights))
             return false;
 
         // First-version rule: no light directly under the beast or player.
@@ -345,6 +355,7 @@ public class BeastTracker : MonoBehaviour
         minimumMoveWait = Mathf.Max(0.1f, minimumMoveWait);
         maximumMoveWait = Mathf.Max(minimumMoveWait, maximumMoveWait);
         lightDuration = Mathf.Max(0.1f, lightDuration);
+        maximumActiveLights = Mathf.Max(1, maximumActiveLights);
     }
 
     private void OnDrawGizmos()

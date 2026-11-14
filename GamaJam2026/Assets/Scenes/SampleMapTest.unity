@@ -2683,7 +2683,8 @@ MonoBehaviour:
   playerNode: {fileID: 612531924}
   minimumMoveWait: 3
   maximumMoveWait: 5
-  lightDuration: 6
+  lightDuration: 15
+  maximumActiveLights: 1
   startAutomatically: 1
   beastMarker: {fileID: 0}
   playerMarker: {fileID: 0}
