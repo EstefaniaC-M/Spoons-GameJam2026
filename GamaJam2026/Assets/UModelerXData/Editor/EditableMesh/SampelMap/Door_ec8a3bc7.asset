@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: -1730198414, guid: 355474d781e5561489e3595e39866770, type: 3}
-  m_Name: Rectangle_ec8a3bc7
+  m_Name: Door_ec8a3bc7
   m_EditorClassIdentifier: 
   DataType: 0
   DataVersion: 5
