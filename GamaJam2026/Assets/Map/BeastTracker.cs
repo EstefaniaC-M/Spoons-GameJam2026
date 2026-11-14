@@ -204,7 +204,7 @@ public class BeastTracker : MonoBehaviour
             var labels = new List<string>();
             foreach (int index in path)
                 labels.Add(nodes[index].name);
-            Debug.Log(path.Count == 0 ? "Beast: no open path; waiting for lights." :
+            Debug.Log(path.Count == 0 ? "Beast: no path to player; will wander if an unlit neighbor is available." :
                 "Beast route: " + string.Join(" -> ", labels), this);
         }
     }
@@ -213,10 +213,32 @@ public class BeastTracker : MonoBehaviour
     {
         // Recheck immediately before a step; never use a stale blocked route.
         Replan();
-        if (path.Count < 2)
-            return;
 
-        SetCurrentNode(nodes[path[1]]);
+        TrackerNode next;
+        if (path.Count >= 2)
+        {
+            // An open route always takes priority over wandering.
+            next = nodes[path[1]];
+        }
+        else if (path.Count == 0)
+        {
+            next = GetRandomUnlitNeighbor();
+            if (next == null)
+            {
+                if (logPaths)
+                    Debug.Log("Beast is trapped at " + currentNode.name + "; no unlit neighbors.", this);
+                return;
+            }
+            if (logPaths)
+                Debug.Log("Beast wanders: " + currentNode.name + " -> " + next.name, this);
+        }
+        else
+        {
+            // A one-node path means it is already at the destination.
+            return;
+        }
+
+        SetCurrentNode(next);
         if (currentNode == playerNode)
         {
             running = false;
@@ -225,6 +247,34 @@ public class BeastTracker : MonoBehaviour
             return;
         }
         Replan();
+    }
+
+    private TrackerNode GetRandomUnlitNeighbor()
+    {
+        int currentIndex = indices[currentNode];
+        var candidates = new List<int>();
+
+        // Use the same validated, bidirectional edges as Dijkstra.
+        foreach (DijkstraPathfinder.Edge edge in edges)
+        {
+            int neighbor = -1;
+            if (edge.From == currentIndex)
+                neighbor = edge.To;
+            else if (edge.To == currentIndex)
+                neighbor = edge.From;
+
+            if (neighbor < 0 || neighbor == currentIndex ||
+                blocked.Contains(neighbor) || candidates.Contains(neighbor))
+                continue;
+
+            candidates.Add(neighbor);
+        }
+
+        if (candidates.Count == 0)
+            return null;
+
+        int choice = UnityEngine.Random.Range(0, candidates.Count);
+        return nodes[candidates[choice]];
     }
 
     private void ScheduleNextMove()

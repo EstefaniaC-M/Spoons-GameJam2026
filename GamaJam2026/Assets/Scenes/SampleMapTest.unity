@@ -2681,7 +2681,7 @@ MonoBehaviour:
     cost: 1
   beastStart: {fileID: 267320322}
   playerNode: {fileID: 612531924}
-  minimumMoveWait: 2
+  minimumMoveWait: 3
   maximumMoveWait: 5
   lightDuration: 6
   startAutomatically: 1
