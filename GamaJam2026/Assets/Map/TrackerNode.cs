@@ -12,6 +12,11 @@ public class TrackerNode : MonoBehaviour
 
     public IReadOnlyList<TrackerNode> Neighbors => neighbors ?? new TrackerNode[0];
 
+    [Tooltip("When blocked, the beast may flee to a random room with this ticked.")]
+    [SerializeField] private bool retreatPoint;
+
+    public bool IsRetreatPoint => retreatPoint;
+
     [Header("Visuals")]
     [Tooltip("The node renderer used to show beast, player, and light colors.")]
     [SerializeField] private Renderer lightIndicator;

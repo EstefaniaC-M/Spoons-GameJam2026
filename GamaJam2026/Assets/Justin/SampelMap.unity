@@ -20643,10 +20643,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 649567904}
   - {fileID: 1724801320}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!43 &475516595
 Mesh:
@@ -21053,10 +21054,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 1005079971}
   - {fileID: 1005079971}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!114 &528411111 stripped
 MonoBehaviour:
@@ -21366,10 +21368,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   neighbors: []
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!43 &601989313
 Mesh:
@@ -24679,10 +24682,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   neighbors: []
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &650539995
 GameObject:
@@ -25098,8 +25102,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 662803536}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.0020299186, y: -0.9556645, z: 0.2943766, w: 0.006614618}
-  m_LocalPosition: {x: -5.0278177, y: 3.187211, z: -0.9056606}
+  m_LocalRotation: {x: 0.00017683084, y: -0.9988956, z: 0.046794455, w: 0.004229532}
+  m_LocalPosition: {x: -5.0254016, y: 2.5206022, z: -1.6451888}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -25459,10 +25463,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   neighbors: []
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &717045130
 GameObject:
@@ -26196,10 +26201,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   neighbors: []
+  retreatPoint: 1
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!114 &829816568 stripped
 MonoBehaviour:
@@ -30276,10 +30282,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 1434638542}
   - {fileID: 2129711243}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1026240043
 GameObject:
@@ -33579,10 +33586,11 @@ MonoBehaviour:
   - {fileID: 593212492}
   - {fileID: 1434638542}
   - {fileID: 791482355}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1075394994
 GameObject:
@@ -35206,8 +35214,12 @@ MonoBehaviour:
   nodes: []
   connections: []
   neighborCostIsDistance: 1
-  minimumMoveWait: 2
-  maximumMoveWait: 5
+  opportunityInterval: 5
+  aggression: 5
+  rollMax: 20
+  skipNearestRetreatPoints: 1
+  retreatSteps: 3
+  retreatStepTime: 0.5
   lightDuration: 6
   maximumActiveLights: 1
   startAutomatically: 1
@@ -38157,10 +38169,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 2129711243}
   - {fileID: 791482355}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1335167043
 GameObject:
@@ -41083,10 +41096,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 520234878}
   - {fileID: 419349224}
+  retreatPoint: 1
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1349979417
 GameObject:
@@ -44183,10 +44197,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 685516517}
   - {fileID: 593212492}
+  retreatPoint: 1
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1408456159
 GameObject:
@@ -44550,10 +44565,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   neighbors: []
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1481718805
 GameObject:
@@ -45639,10 +45655,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 649567904}
   - {fileID: 685516517}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1667204363
 GameObject:
@@ -49114,10 +49131,11 @@ MonoBehaviour:
   neighbors:
   - {fileID: 1434638542}
   - {fileID: 685516517}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1724801314
 GameObject:
@@ -49308,10 +49326,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   neighbors:
   - {fileID: 1434638542}
+  retreatPoint: 0
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &1747021429
 GameObject:
@@ -52969,7 +52988,6 @@ GameObject:
   - component: {fileID: 1918079610}
   - component: {fileID: 1918079609}
   - component: {fileID: 1918079608}
-  - component: {fileID: 1918079613}
   m_Layer: 0
   m_Name: Box (19)
   m_TagString: Untagged
@@ -53131,24 +53149,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 519581252}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1918079613
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1918079607}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b8223991309df2641830a8807c0766d8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  neighbors: []
-  lightIndicator: {fileID: 0}
-  beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
-  litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
-  roomLight: {fileID: 0}
 --- !u!1 &1947372291
 GameObject:
   m_ObjectHideFlags: 0
@@ -59006,10 +59006,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   neighbors: []
+  retreatPoint: 1
   lightIndicator: {fileID: 0}
   beastColor: {r: 1, g: 0, b: 0, a: 1}
-  playerColor: {r: 0, g: 1, b: 1, a: 1}
   litColor: {r: 1, g: 0.75, b: 0.1, a: 1}
+  emissionIntensity: 2
   roomLight: {fileID: 0}
 --- !u!1 &2134118881
 GameObject:

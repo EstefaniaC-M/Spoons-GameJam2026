@@ -37,11 +37,13 @@ public class BeastTracker : MonoBehaviour
     [SerializeField, Min(1)] private int rollMax = 20;
 
     [Header("Retreat when blocked")]
-    [Tooltip("How many steps the beast runs away from the player when a light blocks its way.")]
+    [Tooltip("When blocked, the beast instantly flees to a random node with Retreat Point ticked. " +
+             "If no node has it ticked, it jumps back Retreat Steps rooms instead.")]
+    [SerializeField, Min(0)] private int skipNearestRetreatPoints = 1;
+    [Tooltip("Fallback when no Retreat Points are ticked: rooms to run back, away from the player.")]
     [SerializeField, Min(0)] private int retreatSteps = 3;
-    [Tooltip("Random delay between retreat steps, for erratic scrambling.")]
-    [SerializeField, Min(0.05f)] private float retreatStepDelayMin = 0.2f;
-    [SerializeField, Min(0.05f)] private float retreatStepDelayMax = 0.8f;
+    [Tooltip("Seconds per room while fleeing (lower = faster than normal hunting).")]
+    [SerializeField, Min(0.05f)] private float retreatStepTime = 0.5f;
 
     [Header("Lights")]
     [SerializeField, Min(0.1f)] private float lightDuration = 6f;
@@ -78,14 +80,17 @@ public class BeastTracker : MonoBehaviour
     private float[] distanceToPlayer;
     private TrackerNode currentNode;
     private float nextMoveTime;
-    private int retreatStepsLeft;
-    private float nextRetreatTime;
     private bool initialized;
     private bool running;
 
+    // Rooms still to walk while fleeing (excluding the current room).
+    private readonly List<int> retreatRoute = new List<int>();
+    private int retreatTarget = -1;
+    private float nextRetreatStepTime;
+
     public TrackerNode CurrentNode => currentNode;
     public bool IsRunning => running;
-    public bool IsRetreating => retreatStepsLeft > 0;
+    public bool IsRetreating => retreatRoute.Count > 0;
 
     // Raise this over time (e.g. per night or per minute) to ramp difficulty.
     public int Aggression
@@ -244,18 +249,18 @@ public class BeastTracker : MonoBehaviour
         if (expiredLights.Count > 0)
             Replan();
 
-        // While scrambling away, retreat steps replace movement opportunities.
-        if (retreatStepsLeft > 0)
+        // While fleeing, retreat steps replace movement opportunities.
+        if (IsRetreating)
         {
-            if (Time.time >= nextRetreatTime)
-                RetreatOneStep();
+            if (Time.time >= nextRetreatStepTime)
+                RetreatStep();
             return;
         }
 
         if (Time.time >= nextMoveTime)
         {
             MovementOpportunity();
-            if (running && retreatStepsLeft == 0)
+            if (running)
                 ScheduleNextMove();
         }
     }
@@ -295,6 +300,14 @@ public class BeastTracker : MonoBehaviour
         lightExpiry[node] = Time.time + Mathf.Max(0.1f, lightDuration);
         node.SetLit(true);
         Replan();
+
+        // Lighting the room the beast is about to enter repels it immediately,
+        // so success depends on choosing the right room, not on roll timing.
+        if (!IsRetreating && IsNextRoomOnRoute(node))
+        {
+            StartRetreat();
+            ScheduleNextMove(); // Breathing room, even if it had nowhere to flee.
+        }
         return true;
     }
 
@@ -322,12 +335,9 @@ public class BeastTracker : MonoBehaviour
         // Recheck immediately before a step; never use a stale blocked route.
         Replan();
 
-        // Its preferred route ignores lights. If a light sits on the very next
-        // room of that route, or lights cut off every route, it has been stopped.
-        List<int> direct = DijkstraPathfinder.FindPath(
-            nodes.Length, edges, indices[currentNode], indices[playerNode]);
-        bool lightInFace = direct.Count >= 2 && blocked.Contains(direct[1]);
-        if (lightInFace || path.Count == 0)
+        // If lights cut off every route to the player, it has been stopped.
+        // (A light on its very next room already repelled it when switched on.)
+        if (path.Count == 0)
         {
             StartRetreat();
             return;
@@ -346,26 +356,135 @@ public class BeastTracker : MonoBehaviour
         Replan();
     }
 
-    private void StartRetreat()
+    // Was this the room the beast was about to enter? Uses the route it was
+    // actually taking (around any other lights), before this light went on.
+    private bool IsNextRoomOnRoute(TrackerNode node)
     {
-        if (retreatSteps <= 0)
-        {
-            if (logPaths)
-                Debug.Log("Beast is blocked at " + currentNode.name + " and waits.", this);
-            return;
-        }
-        if (logPaths)
-            Debug.Log("Beast is blocked at " + currentNode.name + "! Retreating " +
-                retreatSteps + " steps.", this);
-        retreatStepsLeft = retreatSteps;
-        nextRetreatTime = Time.time + RetreatDelay();
+        var otherLights = new HashSet<int>(blocked);
+        otherLights.Remove(indices[node]);
+        List<int> route = DijkstraPathfinder.FindPath(
+            nodes.Length, edges, indices[currentNode], indices[playerNode], otherLights);
+        return route.Count >= 2 && nodes[route[1]] == node;
     }
 
-    // Each retreat step goes to the unlit neighbor farthest from the player.
-    // It stops early if no neighbor is farther away (cornered).
-    private void RetreatOneStep()
+    // Plans a fleeing route; Update then walks it one room per Retreat Step Time.
+    private void StartRetreat()
     {
-        int currentIndex = indices[currentNode];
+        retreatRoute.Clear();
+        retreatTarget = -1;
+        if (!PlanRouteToRetreatPoint())
+            PlanStepsAway();
+
+        if (retreatRoute.Count == 0)
+        {
+            if (logPaths)
+                Debug.Log("Beast is blocked at " + currentNode.name + " but has nowhere to flee; it stays.", this);
+            return;
+        }
+
+        if (logPaths)
+            Debug.Log("Beast is blocked! Fleeing " + currentNode.name + " -> " +
+                nodes[retreatTarget].name + " (" + retreatRoute.Count + " rooms)", this);
+        nextRetreatStepTime = Time.time + Mathf.Max(0.05f, retreatStepTime);
+    }
+
+    // Route to a random Retreat Point, skipping the ones nearest the player
+    // (as long as at least one option is left). Returns false if none is reachable.
+    private bool PlanRouteToRetreatPoint()
+    {
+        var points = new List<TrackerNode>();
+        foreach (TrackerNode node in nodes)
+        {
+            if (node.IsRetreatPoint && node != currentNode && node != playerNode &&
+                !blocked.Contains(indices[node]))
+                points.Add(node);
+        }
+        if (points.Count == 0)
+            return false;
+
+        points.Sort((x, y) =>
+            distanceToPlayer[indices[x]].CompareTo(distanceToPlayer[indices[y]]));
+        int skip = Mathf.Min(skipNearestRetreatPoints, points.Count - 1);
+        points.RemoveRange(0, skip);
+
+        // Try the remaining points in random order until one has an open route.
+        while (points.Count > 0)
+        {
+            int pick = UnityEngine.Random.Range(0, points.Count);
+            if (SetRetreatRouteTo(indices[points[pick]]))
+                return true;
+            points.RemoveAt(pick);
+        }
+        return false;
+    }
+
+    // Shortest route to target that avoids lit rooms and the player's room.
+    private bool SetRetreatRouteTo(int target)
+    {
+        var avoid = new HashSet<int>(blocked) { indices[playerNode] };
+        List<int> route = DijkstraPathfinder.FindPath(
+            nodes.Length, edges, indices[currentNode], target, avoid);
+        retreatRoute.Clear();
+        if (route.Count < 2)
+            return false;
+        for (int i = 1; i < route.Count; i++)
+            retreatRoute.Add(route[i]);
+        retreatTarget = target;
+        return true;
+    }
+
+    // Fallback with no Retreat Points: up to Retreat Steps rooms, each farther from the player.
+    private void PlanStepsAway()
+    {
+        int at = indices[currentNode];
+        for (int i = 0; i < retreatSteps; i++)
+        {
+            int next = FarthestUnlitNeighbor(at);
+            if (next < 0)
+                break; // Cornered.
+            retreatRoute.Add(next);
+            at = next;
+        }
+        if (retreatRoute.Count > 0)
+            retreatTarget = at;
+    }
+
+    private void RetreatStep()
+    {
+        // A light switched on along the way: find another way to the same spot.
+        if (blocked.Contains(retreatRoute[0]))
+        {
+            if (blocked.Contains(retreatTarget) || !SetRetreatRouteTo(retreatTarget))
+            {
+                if (logPaths)
+                    Debug.Log("Beast's escape route is blocked; it stops at " + currentNode.name, this);
+                EndRetreat();
+                return;
+            }
+        }
+
+        int next = retreatRoute[0];
+        retreatRoute.RemoveAt(0);
+        SetCurrentNode(nodes[next]);
+
+        if (retreatRoute.Count == 0)
+            EndRetreat();
+        else
+            nextRetreatStepTime = Time.time + Mathf.Max(0.05f, retreatStepTime);
+    }
+
+    private void EndRetreat()
+    {
+        retreatRoute.Clear();
+        retreatTarget = -1;
+        Replan();
+        ScheduleNextMove(); // A full interval before it starts hunting again.
+    }
+
+    // The unlit neighbor farthest from the player (random among ties),
+    // or -1 if no neighbor is farther away than the current room.
+    private int FarthestUnlitNeighbor(int currentIndex)
+    {
         float bestDistance = distanceToPlayer[currentIndex];
         var best = new List<int>();
 
@@ -387,37 +506,8 @@ public class BeastTracker : MonoBehaviour
         }
 
         if (best.Count == 0)
-        {
-            if (logPaths)
-                Debug.Log("Beast is cornered at " + currentNode.name + "; retreat ends.", this);
-            EndRetreat();
-            return;
-        }
-
-        TrackerNode next = nodes[best[UnityEngine.Random.Range(0, best.Count)]];
-        if (logPaths)
-            Debug.Log("Beast retreats: " + currentNode.name + " -> " + next.name, this);
-        SetCurrentNode(next);
-
-        retreatStepsLeft--;
-        if (retreatStepsLeft > 0)
-            nextRetreatTime = Time.time + RetreatDelay();
-        else
-            EndRetreat();
-    }
-
-    private void EndRetreat()
-    {
-        retreatStepsLeft = 0;
-        Replan();
-        ScheduleNextMove();
-    }
-
-    private float RetreatDelay()
-    {
-        float minimum = Mathf.Max(0.05f, retreatStepDelayMin);
-        float maximum = Mathf.Max(minimum, retreatStepDelayMax);
-        return UnityEngine.Random.Range(minimum, maximum);
+            return -1;
+        return best[UnityEngine.Random.Range(0, best.Count)];
     }
 
     private IEnumerable<int> NeighborsOf(int index)
@@ -457,7 +547,8 @@ public class BeastTracker : MonoBehaviour
     private void ResetState()
     {
         running = false;
-        retreatStepsLeft = 0;
+        retreatRoute.Clear();
+        retreatTarget = -1;
         lightExpiry.Clear();
         blocked.Clear();
         foreach (TrackerNode node in nodes)
@@ -499,8 +590,8 @@ public class BeastTracker : MonoBehaviour
         rollMax = Mathf.Max(1, rollMax);
         aggression = Mathf.Max(0, aggression);
         retreatSteps = Mathf.Max(0, retreatSteps);
-        retreatStepDelayMin = Mathf.Max(0.05f, retreatStepDelayMin);
-        retreatStepDelayMax = Mathf.Max(retreatStepDelayMin, retreatStepDelayMax);
+        skipNearestRetreatPoints = Mathf.Max(0, skipNearestRetreatPoints);
+        retreatStepTime = Mathf.Max(0.05f, retreatStepTime);
         lightDuration = Mathf.Max(0.1f, lightDuration);
         maximumActiveLights = Mathf.Max(1, maximumActiveLights);
     }
