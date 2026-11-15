@@ -88,8 +88,12 @@ public class Tube : MonoBehaviour
         if (!dragging) return;
         dragging = false;
 
-        foreach (Collider2D hit in Physics2D.OverlapPointAll(MouseWorld()))
+        Collider2D[] hits = Physics2D.OverlapPointAll(MouseWorld());
+        Debug.Log(name + " dropped, colliders found: " + hits.Length);
+
+        foreach (Collider2D hit in hits)
         {
+            Debug.Log("hit " + hit.name);
             Tube other = hit.GetComponent<Tube>();
             if (other != null && other.isResultTube)
             {
