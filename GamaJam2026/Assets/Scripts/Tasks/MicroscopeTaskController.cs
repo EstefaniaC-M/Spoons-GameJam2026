@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -26,11 +27,12 @@ public class MicroscopeTaskController : MonoBehaviour
     [Header("Sample Selection")]
     public Button targetCellButton;
     public TMP_Text resultText;
+    [SerializeField] private TMP_Text focusWarningText;
+    [Min(0.1f)] [SerializeField] private float focusWarningDuration = 1.5f;
 
     [Header("Task Settings")]
     [Range(0, 100)] public int correctFocusValue = 67;
     public int focusTolerance = 3;
-    [SerializeField] private TaskUIController taskUIController;
 
     private bool samplePlaced;
     private bool isFocused = false;
@@ -38,6 +40,7 @@ public class MicroscopeTaskController : MonoBehaviour
     private float lastFocusValue;
     private Material originalSpecimenMaterial;
     private Material runtimeBlurMaterial;
+    private Coroutine focusWarningCoroutine;
     private static readonly int BlurAmountId = Shader.PropertyToID("_BlurAmount");
 
     private void Start()
@@ -47,6 +50,7 @@ public class MicroscopeTaskController : MonoBehaviour
         resistanceStart = Mathf.Clamp(resistanceStart, 0f, 100f);
         resistanceEnd = Mathf.Clamp(resistanceEnd, resistanceStart, 100f);
         resistanceMultiplier = Mathf.Clamp(resistanceMultiplier, 0.05f, 1f);
+        focusWarningDuration = Mathf.Max(0.1f, focusWarningDuration);
 
         if (microscopeTaskPanel == null)
             Debug.LogError("MicroscopeTaskController requires a microscope task panel.", this);
@@ -81,6 +85,11 @@ public class MicroscopeTaskController : MonoBehaviour
             targetCellButton.onClick.AddListener(SelectTargetCell);
         }
 
+        if (focusWarningText == null)
+            Debug.LogError("MicroscopeTaskController requires a focus warning text field.", this);
+        else
+            focusWarningText.gameObject.SetActive(false);
+
         if (focusStatus == null)
             Debug.LogError("MicroscopeTaskController requires a focus status text field.", this);
         if (resultText == null)
@@ -100,12 +109,27 @@ public class MicroscopeTaskController : MonoBehaviour
         if (targetCellButton != null)
             targetCellButton.onClick.RemoveListener(SelectTargetCell);
 
+        if (focusWarningCoroutine != null)
+            StopCoroutine(focusWarningCoroutine);
+
         if (specimenImage != null && runtimeBlurMaterial != null &&
             specimenImage.material == runtimeBlurMaterial)
             specimenImage.material = originalSpecimenMaterial;
 
         if (runtimeBlurMaterial != null)
             Destroy(runtimeBlurMaterial);
+    }
+
+    private void OnDisable()
+    {
+        if (focusWarningCoroutine != null)
+        {
+            StopCoroutine(focusWarningCoroutine);
+            focusWarningCoroutine = null;
+        }
+
+        if (focusWarningText != null)
+            focusWarningText.gameObject.SetActive(false);
     }
 
     internal void OnSampleDropped()
@@ -118,6 +142,8 @@ public class MicroscopeTaskController : MonoBehaviour
             microscopeTaskPanel.SetActive(true);
         if (focusSlider != null)
             focusSlider.interactable = true;
+        if (targetCellButton != null)
+            targetCellButton.interactable = true;
 
         SetFocusStatus("Sample placed. Adjust the focus.");
         SetResultText("Find the focus point, then select the target cell.");
@@ -170,7 +196,7 @@ public class MicroscopeTaskController : MonoBehaviour
 
         UpdateSpecimenBlur(value);
         if (targetCellButton != null)
-            targetCellButton.interactable = isFocused && !taskCompleted;
+            targetCellButton.interactable = samplePlaced && !taskCompleted;
     }
 
     private void InitializeSpecimenBlur()
@@ -219,8 +245,14 @@ public class MicroscopeTaskController : MonoBehaviour
 
     private void SelectTargetCell()
     {
-        if (!samplePlaced || !isFocused || taskCompleted)
+        if (!samplePlaced || taskCompleted)
             return;
+
+        if (!isFocused)
+        {
+            ShowFocusWarning();
+            return;
+        }
 
         taskCompleted = true;
         if (targetCellButton != null)
@@ -231,11 +263,31 @@ public class MicroscopeTaskController : MonoBehaviour
             microscopeTaskPanel.SetActive(false);
         Debug.Log("Microscope task completed!");
 
-        if (taskUIController != null)
-            taskUIController.MarkSelectedTaskCompleted();
-        else if (explorationUI != null)
+        if (explorationUI != null)
             explorationUI.SetActive(true);
         else
-            Debug.LogWarning("Assign a TaskUIController or Exploration UI to return after the microscope task.", this);
+            Debug.LogWarning("Assign an Exploration UI.", this);
+    }
+
+    private void ShowFocusWarning()
+    {
+        if (focusWarningText == null)
+            return;
+
+        if (focusWarningCoroutine != null)
+            StopCoroutine(focusWarningCoroutine);
+
+        focusWarningText.text = "The sample is not in focus";
+        focusWarningText.gameObject.SetActive(true);
+        focusWarningCoroutine = StartCoroutine(HideFocusWarningAfterDelay());
+    }
+
+    private IEnumerator HideFocusWarningAfterDelay()
+    {
+        yield return new WaitForSecondsRealtime(focusWarningDuration);
+
+        if (focusWarningText != null)
+            focusWarningText.gameObject.SetActive(false);
+        focusWarningCoroutine = null;
     }
 }
