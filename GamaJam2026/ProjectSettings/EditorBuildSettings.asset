@@ -7,5 +7,11 @@ EditorBuildSettings:
   m_Scenes:
   - enabled: 1
     path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    guid: 98fa83f3a28fec844985d66f6235f1fb
+  - enabled: 1
+    path: Assets/Justin/Main Menu.unity
+    guid: 5c909e4e1852ad54997ac214566105e4
+  - enabled: 1
+    path: Assets/Justin/SampelMap.unity
+    guid: 34f69aafc49c2cc4e9e3eaf4491504e6
   m_configObjects: {}
