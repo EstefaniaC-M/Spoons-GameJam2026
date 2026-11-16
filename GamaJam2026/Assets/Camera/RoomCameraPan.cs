@@ -14,6 +14,10 @@ public class RoomCameraPan : MonoBehaviour
     [SerializeField, Min(0f)]
     private float panSpeed = 45f;
 
+    [Tooltip("Allow the camera to spin a full 360 degrees instead of stopping at the POV min/max limits.")]
+    [SerializeField]
+    private bool allowFullRotation = true;
+
     private CinemachineVirtualCamera roomCamera;
     private CinemachinePOV pov;
     private float fixedVerticalAngle;
@@ -38,6 +42,14 @@ public class RoomCameraPan : MonoBehaviour
         pov.m_VerticalAxis.Reset();
 
         fixedVerticalAngle = pov.m_VerticalAxis.Value;
+
+        if (allowFullRotation)
+        {
+            // Open the horizontal range to a full circle and let it wrap around.
+            pov.m_HorizontalAxis.m_MinValue = -180f;
+            pov.m_HorizontalAxis.m_MaxValue = 180f;
+            pov.m_HorizontalAxis.m_Wrap = true;
+        }
     }
 
     private void Update()
@@ -81,9 +93,17 @@ public class RoomCameraPan : MonoBehaviour
         float newAngle = pov.m_HorizontalAxis.Value
             + direction * panSpeed * Time.deltaTime;
 
-        pov.m_HorizontalAxis.Value = Mathf.Clamp(
-            newAngle,
-            pov.m_HorizontalAxis.m_MinValue,
-            pov.m_HorizontalAxis.m_MaxValue);
+        if (allowFullRotation)
+        {
+            // Wrap into the -180..180 range so the camera can keep spinning.
+            pov.m_HorizontalAxis.Value = Mathf.Repeat(newAngle + 180f, 360f) - 180f;
+        }
+        else
+        {
+            pov.m_HorizontalAxis.Value = Mathf.Clamp(
+                newAngle,
+                pov.m_HorizontalAxis.m_MinValue,
+                pov.m_HorizontalAxis.m_MaxValue);
+        }
     }
 }

@@ -102,4 +102,48 @@ public static class DijkstraPathfinder
         path.Reverse();
         return path;
     }
+
+    // Shortest travel cost from source to every node (PositiveInfinity if unreachable).
+    public static float[] DistancesFrom(int nodeCount, IReadOnlyList<Edge> edges, int source)
+    {
+        var adjacency = new List<Edge>[nodeCount];
+        for (int i = 0; i < nodeCount; i++)
+            adjacency[i] = new List<Edge>();
+        foreach (Edge edge in edges)
+        {
+            adjacency[edge.From].Add(edge);
+            adjacency[edge.To].Add(new Edge(edge.To, edge.From, edge.Cost));
+        }
+
+        var distance = new float[nodeCount];
+        var visited = new bool[nodeCount];
+        for (int i = 0; i < nodeCount; i++)
+            distance[i] = float.PositiveInfinity;
+        distance[source] = 0f;
+
+        for (int step = 0; step < nodeCount; step++)
+        {
+            int current = -1;
+            float best = float.PositiveInfinity;
+            for (int i = 0; i < nodeCount; i++)
+            {
+                if (!visited[i] && distance[i] < best)
+                {
+                    best = distance[i];
+                    current = i;
+                }
+            }
+            if (current == -1)
+                break;
+
+            visited[current] = true;
+            foreach (Edge edge in adjacency[current])
+            {
+                float candidate = distance[current] + edge.Cost;
+                if (candidate < distance[edge.To])
+                    distance[edge.To] = candidate;
+            }
+        }
+        return distance;
+    }
 }

@@ -15,6 +15,9 @@ public class CameraViewManager : MonoBehaviour
     private CinemachinePOV roomPOV;
     private bool locked;
 
+    private GameObject currentMinigame;
+    private Coroutine openMinigameRoutine;
+
     private string horizontalInputName;
     private string verticalInputName;
 
@@ -23,6 +26,7 @@ public class CameraViewManager : MonoBehaviour
     private void Update()
     {
         if (!locked && Input.GetKeyDown(KeyCode.Alpha1))
+        {
             ReturnToRoom();
     }
 

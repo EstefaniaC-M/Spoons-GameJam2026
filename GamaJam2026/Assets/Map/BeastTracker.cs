@@ -16,14 +16,36 @@ public class BeastTracker : MonoBehaviour
     }
 
     [Header("Graph")]
-    [SerializeField] private TrackerNode[] nodes;
-    [SerializeField] private Connection[] connections;
     [SerializeField] private TrackerNode beastStart;
     [SerializeField] private TrackerNode playerNode;
+    [Tooltip("Optional. Leave empty to use every TrackerNode in the scene. " +
+             "Nodes reached through Neighbors lists are added automatically.")]
+    [SerializeField] private TrackerNode[] nodes;
+    [Tooltip("Optional. Corridors normally come from each node's Neighbors list; " +
+             "use this only to give a corridor a custom cost.")]
+    [SerializeField] private Connection[] connections;
+    [Tooltip("On: Neighbors corridors cost their length. Off: every corridor costs 1.")]
+    [SerializeField] private bool neighborCostIsDistance = true;
 
-    [Header("Timing")]
-    [SerializeField, Min(0.1f)] private float minimumMoveWait = 2f;
-    [SerializeField, Min(0.1f)] private float maximumMoveWait = 5f;
+    [Header("Movement opportunities (FNAF-style)")]
+    [Tooltip("Seconds between movement opportunities.")]
+    [SerializeField, Min(0.1f)] private float opportunityInterval = 5f;
+    [Tooltip("Aggression / AI level. Each opportunity rolls 1..Roll Max; " +
+             "the beast moves if the roll is <= this. 0 = never moves, Roll Max = always moves.")]
+    [SerializeField, Min(0)] private int aggression = 10;
+    [Tooltip("Sides on the movement die (FNAF uses 20).")]
+    [SerializeField, Min(1)] private int rollMax = 20;
+
+    [Header("Retreat when blocked")]
+    [Tooltip("When blocked, the beast instantly flees to a random node with Retreat Point ticked. " +
+             "If no node has it ticked, it jumps back Retreat Steps rooms instead.")]
+    [SerializeField, Min(0)] private int skipNearestRetreatPoints = 1;
+    [Tooltip("Fallback when no Retreat Points are ticked: rooms to run back, away from the player.")]
+    [SerializeField, Min(0)] private int retreatSteps = 3;
+    [Tooltip("Seconds per room while fleeing (lower = faster than normal hunting).")]
+    [SerializeField, Min(0.05f)] private float retreatStepTime = 0.5f;
+
+    [Header("Lights")]
     [SerializeField, Min(0.1f)] private float lightDuration = 6f;
     [Tooltip("How many different nodes may be lit at once. Active timers cannot be refreshed.")]
     [SerializeField, Min(1)] private int maximumActiveLights = 1;
@@ -34,6 +56,15 @@ public class BeastTracker : MonoBehaviour
     [SerializeField] private Transform playerMarker;
     [Tooltip("World-space offset from each node position, for placing dots above the drawing.")]
     [SerializeField] private Vector3 markerOffset = Vector3.zero;
+
+    [Header("Audio")]
+    [Tooltip("Plays the movement cues. If empty, one is added to this object.")]
+    [SerializeField] private AudioSource audioSource;
+    [Tooltip("Played each time the beast moves to a new room while hunting.")]
+    [SerializeField] private AudioClip moveSound;
+    [Tooltip("Optional. Played each room while fleeing. Falls back to Move Sound if empty.")]
+    [SerializeField] private AudioClip retreatSound;
+    [SerializeField, Range(0f, 1f)] private float moveVolume = 1f;
 
     [Header("Camera interaction")]
     [Tooltip("Turn off only when testing nodes before the tracker camera is set up.")]
@@ -55,13 +86,27 @@ public class BeastTracker : MonoBehaviour
     private readonly HashSet<int> blocked = new HashSet<int>();
 
     private List<int> path = new List<int>();
+    private float[] distanceToPlayer;
     private TrackerNode currentNode;
     private float nextMoveTime;
     private bool initialized;
     private bool running;
 
+    // Rooms still to walk while fleeing (excluding the current room).
+    private readonly List<int> retreatRoute = new List<int>();
+    private int retreatTarget = -1;
+    private float nextRetreatStepTime;
+
     public TrackerNode CurrentNode => currentNode;
     public bool IsRunning => running;
+    public bool IsRetreating => retreatRoute.Count > 0;
+
+    // Raise this over time (e.g. per night or per minute) to ramp difficulty.
+    public int Aggression
+    {
+        get => aggression;
+        set => aggression = Mathf.Max(0, value);
+    }
 
     private void Start()
     {
@@ -81,33 +126,77 @@ public class BeastTracker : MonoBehaviour
 
     private bool BuildGraph()
     {
-        if (nodes == null || nodes.Length == 0 || connections == null)
-            return ConfigurationError("Assign the Nodes and Connections lists.");
         if (requireTrackerView && (brain == null || trackerCamera == null))
             return ConfigurationError("Assign Brain and Tracker Camera, or disable Require Tracker View for prototyping.");
+        if (beastStart == null || playerNode == null)
+            return ConfigurationError("Assign Beast Start and Player Node.");
+        if (connections == null)
+            connections = new Connection[0];
+
+        // Collect nodes: the Nodes list (or the whole scene if it is empty),
+        // plus start, player, and anything reachable through Neighbors.
+        var collected = new List<TrackerNode>();
+        void AddNode(TrackerNode node)
+        {
+            if (node != null && !collected.Contains(node))
+                collected.Add(node);
+        }
+        if (nodes != null)
+            foreach (TrackerNode node in nodes)
+                AddNode(node);
+        if (collected.Count == 0)
+            foreach (TrackerNode node in FindObjectsByType<TrackerNode>(FindObjectsSortMode.None))
+                AddNode(node);
+        AddNode(beastStart);
+        AddNode(playerNode);
+        foreach (Connection connection in connections)
+        {
+            if (connection != null)
+            {
+                AddNode(connection.a);
+                AddNode(connection.b);
+            }
+        }
+        for (int i = 0; i < collected.Count; i++)
+            foreach (TrackerNode neighbor in collected[i].Neighbors)
+                AddNode(neighbor);
+        nodes = collected.ToArray();
 
         indices.Clear();
         edges.Clear();
         for (int i = 0; i < nodes.Length; i++)
-        {
-            if (nodes[i] == null || indices.ContainsKey(nodes[i]))
-                return ConfigurationError("Assign each node exactly once.");
             indices.Add(nodes[i], i);
-        }
 
-        if (beastStart == null || playerNode == null ||
-            !indices.ContainsKey(beastStart) || !indices.ContainsKey(playerNode))
-            return ConfigurationError("Beast Start and Player Node must be in Nodes.");
+        // Each corridor is added once, whichever side lists it.
+        var seen = new HashSet<(int, int)>();
+        bool TryMarkCorridor(int a, int b) =>
+            seen.Add(a < b ? (a, b) : (b, a));
 
         foreach (Connection connection in connections)
         {
             if (connection == null || connection.a == null || connection.b == null ||
-                !indices.ContainsKey(connection.a) || !indices.ContainsKey(connection.b) ||
                 connection.a == connection.b || connection.cost <= 0f ||
                 float.IsNaN(connection.cost) || float.IsInfinity(connection.cost))
-                return ConfigurationError("Connections need two different listed nodes and a finite positive cost.");
-            edges.Add(new DijkstraPathfinder.Edge(
-                indices[connection.a], indices[connection.b], connection.cost));
+                return ConfigurationError("Connections need two different nodes and a finite positive cost.");
+            int a = indices[connection.a], b = indices[connection.b];
+            if (TryMarkCorridor(a, b))
+                edges.Add(new DijkstraPathfinder.Edge(a, b, connection.cost));
+        }
+
+        foreach (TrackerNode node in nodes)
+        {
+            foreach (TrackerNode neighbor in node.Neighbors)
+            {
+                if (neighbor == null || neighbor == node)
+                    continue;
+                int a = indices[node], b = indices[neighbor];
+                if (!TryMarkCorridor(a, b))
+                    continue;
+                float cost = neighborCostIsDistance
+                    ? Mathf.Max(0.01f, Vector3.Distance(node.transform.position, neighbor.transform.position))
+                    : 1f;
+                edges.Add(new DijkstraPathfinder.Edge(a, b, cost));
+            }
         }
 
         foreach (TrackerNode node in nodes)
@@ -116,6 +205,9 @@ public class BeastTracker : MonoBehaviour
                 indices[node], indices[playerNode]).Count == 0)
                 return ConfigurationError("All nodes must initially connect to the player. Disconnected node: " + node.name);
         }
+
+        // Map distance to the player (ignoring lights), used to pick retreat directions.
+        distanceToPlayer = DijkstraPathfinder.DistancesFrom(nodes.Length, edges, indices[playerNode]);
 
         // A marker must be a separate visual, never a graph node or its hierarchy.
         beastMarker = ValidateMarker(beastMarker, "Beast Marker");
@@ -166,12 +258,32 @@ public class BeastTracker : MonoBehaviour
         if (expiredLights.Count > 0)
             Replan();
 
+        // While fleeing, retreat steps replace movement opportunities.
+        if (IsRetreating)
+        {
+            if (Time.time >= nextRetreatStepTime)
+                RetreatStep();
+            return;
+        }
+
         if (Time.time >= nextMoveTime)
         {
-            AdvanceOneNode();
+            MovementOpportunity();
             if (running)
                 ScheduleNextMove();
         }
+    }
+
+    // FNAF-style: roll 1..rollMax; move only if the roll is <= aggression.
+    private void MovementOpportunity()
+    {
+        int roll = UnityEngine.Random.Range(1, Mathf.Max(1, rollMax) + 1);
+        bool success = roll <= aggression;
+        if (logPaths)
+            Debug.Log($"Beast opportunity: rolled {roll} vs aggression {aggression} -> " +
+                (success ? "MOVE" : "stay"), this);
+        if (success)
+            AdvanceOneNode();
     }
 
     public bool TryActivateLight(TrackerNode node)
@@ -197,6 +309,14 @@ public class BeastTracker : MonoBehaviour
         lightExpiry[node] = Time.time + Mathf.Max(0.1f, lightDuration);
         node.SetLit(true);
         Replan();
+
+        // Lighting the room the beast is about to enter repels it immediately,
+        // so success depends on choosing the right room, not on roll timing.
+        if (!IsRetreating && IsNextRoomOnRoute(node))
+        {
+            StartRetreat();
+            ScheduleNextMove(); // Breathing room, even if it had nowhere to flee.
+        }
         return true;
     }
 
@@ -214,7 +334,7 @@ public class BeastTracker : MonoBehaviour
             var labels = new List<string>();
             foreach (int index in path)
                 labels.Add(nodes[index].name);
-            Debug.Log(path.Count == 0 ? "Beast: no path to player; will wander if an unlit neighbor is available." :
+            Debug.Log(path.Count == 0 ? "Beast: lights cut off every route; it will retreat on its next move." :
                 "Beast route: " + string.Join(" -> ", labels), this);
         }
     }
@@ -224,31 +344,18 @@ public class BeastTracker : MonoBehaviour
         // Recheck immediately before a step; never use a stale blocked route.
         Replan();
 
-        TrackerNode next;
-        if (path.Count >= 2)
+        // If lights cut off every route to the player, it has been stopped.
+        // (A light on its very next room already repelled it when switched on.)
+        if (path.Count == 0)
         {
-            // An open route always takes priority over wandering.
-            next = nodes[path[1]];
-        }
-        else if (path.Count == 0)
-        {
-            next = GetRandomUnlitNeighbor();
-            if (next == null)
-            {
-                if (logPaths)
-                    Debug.Log("Beast is trapped at " + currentNode.name + "; no unlit neighbors.", this);
-                return;
-            }
-            if (logPaths)
-                Debug.Log("Beast wanders: " + currentNode.name + " -> " + next.name, this);
-        }
-        else
-        {
-            // A one-node path means it is already at the destination.
+            StartRetreat();
             return;
         }
+        if (path.Count < 2)
+            return; // Already at the player.
 
-        SetCurrentNode(next);
+        SetCurrentNode(nodes[path[1]]);
+        PlayMoveSound(moveSound);
         if (currentNode == playerNode)
         {
             running = false;
@@ -259,39 +366,175 @@ public class BeastTracker : MonoBehaviour
         Replan();
     }
 
-    private TrackerNode GetRandomUnlitNeighbor()
+    // Was this the room the beast was about to enter? Uses the route it was
+    // actually taking (around any other lights), before this light went on.
+    private bool IsNextRoomOnRoute(TrackerNode node)
     {
-        int currentIndex = indices[currentNode];
-        var candidates = new List<int>();
+        var otherLights = new HashSet<int>(blocked);
+        otherLights.Remove(indices[node]);
+        List<int> route = DijkstraPathfinder.FindPath(
+            nodes.Length, edges, indices[currentNode], indices[playerNode], otherLights);
+        return route.Count >= 2 && nodes[route[1]] == node;
+    }
 
-        // Use the same validated, bidirectional edges as Dijkstra.
-        foreach (DijkstraPathfinder.Edge edge in edges)
+    // Plans a fleeing route; Update then walks it one room per Retreat Step Time.
+    private void StartRetreat()
+    {
+        retreatRoute.Clear();
+        retreatTarget = -1;
+        if (!PlanRouteToRetreatPoint())
+            PlanStepsAway();
+
+        if (retreatRoute.Count == 0)
         {
-            int neighbor = -1;
-            if (edge.From == currentIndex)
-                neighbor = edge.To;
-            else if (edge.To == currentIndex)
-                neighbor = edge.From;
-
-            if (neighbor < 0 || neighbor == currentIndex ||
-                blocked.Contains(neighbor) || candidates.Contains(neighbor))
-                continue;
-
-            candidates.Add(neighbor);
+            if (logPaths)
+                Debug.Log("Beast is blocked at " + currentNode.name + " but has nowhere to flee; it stays.", this);
+            return;
         }
 
-        if (candidates.Count == 0)
-            return null;
+        if (logPaths)
+            Debug.Log("Beast is blocked! Fleeing " + currentNode.name + " -> " +
+                nodes[retreatTarget].name + " (" + retreatRoute.Count + " rooms)", this);
+        nextRetreatStepTime = Time.time + Mathf.Max(0.05f, retreatStepTime);
+    }
 
-        int choice = UnityEngine.Random.Range(0, candidates.Count);
-        return nodes[candidates[choice]];
+    // Route to a random Retreat Point, skipping the ones nearest the player
+    // (as long as at least one option is left). Returns false if none is reachable.
+    private bool PlanRouteToRetreatPoint()
+    {
+        var points = new List<TrackerNode>();
+        foreach (TrackerNode node in nodes)
+        {
+            if (node.IsRetreatPoint && node != currentNode && node != playerNode &&
+                !blocked.Contains(indices[node]))
+                points.Add(node);
+        }
+        if (points.Count == 0)
+            return false;
+
+        points.Sort((x, y) =>
+            distanceToPlayer[indices[x]].CompareTo(distanceToPlayer[indices[y]]));
+        int skip = Mathf.Min(skipNearestRetreatPoints, points.Count - 1);
+        points.RemoveRange(0, skip);
+
+        // Try the remaining points in random order until one has an open route.
+        while (points.Count > 0)
+        {
+            int pick = UnityEngine.Random.Range(0, points.Count);
+            if (SetRetreatRouteTo(indices[points[pick]]))
+                return true;
+            points.RemoveAt(pick);
+        }
+        return false;
+    }
+
+    // Shortest route to target that avoids lit rooms and the player's room.
+    private bool SetRetreatRouteTo(int target)
+    {
+        var avoid = new HashSet<int>(blocked) { indices[playerNode] };
+        List<int> route = DijkstraPathfinder.FindPath(
+            nodes.Length, edges, indices[currentNode], target, avoid);
+        retreatRoute.Clear();
+        if (route.Count < 2)
+            return false;
+        for (int i = 1; i < route.Count; i++)
+            retreatRoute.Add(route[i]);
+        retreatTarget = target;
+        return true;
+    }
+
+    // Fallback with no Retreat Points: up to Retreat Steps rooms, each farther from the player.
+    private void PlanStepsAway()
+    {
+        int at = indices[currentNode];
+        for (int i = 0; i < retreatSteps; i++)
+        {
+            int next = FarthestUnlitNeighbor(at);
+            if (next < 0)
+                break; // Cornered.
+            retreatRoute.Add(next);
+            at = next;
+        }
+        if (retreatRoute.Count > 0)
+            retreatTarget = at;
+    }
+
+    private void RetreatStep()
+    {
+        // A light switched on along the way: find another way to the same spot.
+        if (blocked.Contains(retreatRoute[0]))
+        {
+            if (blocked.Contains(retreatTarget) || !SetRetreatRouteTo(retreatTarget))
+            {
+                if (logPaths)
+                    Debug.Log("Beast's escape route is blocked; it stops at " + currentNode.name, this);
+                EndRetreat();
+                return;
+            }
+        }
+
+        int next = retreatRoute[0];
+        retreatRoute.RemoveAt(0);
+        SetCurrentNode(nodes[next]);
+        PlayMoveSound(retreatSound != null ? retreatSound : moveSound);
+
+        if (retreatRoute.Count == 0)
+            EndRetreat();
+        else
+            nextRetreatStepTime = Time.time + Mathf.Max(0.05f, retreatStepTime);
+    }
+
+    private void EndRetreat()
+    {
+        retreatRoute.Clear();
+        retreatTarget = -1;
+        Replan();
+        ScheduleNextMove(); // A full interval before it starts hunting again.
+    }
+
+    // The unlit neighbor farthest from the player (random among ties),
+    // or -1 if no neighbor is farther away than the current room.
+    private int FarthestUnlitNeighbor(int currentIndex)
+    {
+        float bestDistance = distanceToPlayer[currentIndex];
+        var best = new List<int>();
+
+        foreach (int neighbor in NeighborsOf(currentIndex))
+        {
+            if (blocked.Contains(neighbor) || neighbor == indices[playerNode])
+                continue;
+            float d = distanceToPlayer[neighbor];
+            if (d > bestDistance + 0.0001f)
+            {
+                bestDistance = d;
+                best.Clear();
+                best.Add(neighbor);
+            }
+            else if (best.Count > 0 && Mathf.Abs(d - bestDistance) <= 0.0001f)
+            {
+                best.Add(neighbor);
+            }
+        }
+
+        if (best.Count == 0)
+            return -1;
+        return best[UnityEngine.Random.Range(0, best.Count)];
+    }
+
+    private IEnumerable<int> NeighborsOf(int index)
+    {
+        foreach (DijkstraPathfinder.Edge edge in edges)
+        {
+            if (edge.From == index)
+                yield return edge.To;
+            else if (edge.To == index)
+                yield return edge.From;
+        }
     }
 
     private void ScheduleNextMove()
     {
-        float minimum = Mathf.Max(0.1f, minimumMoveWait);
-        float maximum = Mathf.Max(minimum, maximumMoveWait);
-        nextMoveTime = Time.time + UnityEngine.Random.Range(minimum, maximum);
+        nextMoveTime = Time.time + Mathf.Max(0.1f, opportunityInterval);
     }
 
     private void UpdateMarkers()
@@ -300,6 +543,18 @@ public class BeastTracker : MonoBehaviour
             beastMarker.position = currentNode.transform.position + markerOffset;
         if (playerMarker != null)
             playerMarker.position = playerNode.transform.position + markerOffset;
+    }
+
+    private void PlayMoveSound(AudioClip clip)
+    {
+        if (clip == null)
+            return;
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+        }
+        audioSource.PlayOneShot(clip, moveVolume);
     }
 
     private void SetCurrentNode(TrackerNode newNode)
@@ -315,6 +570,8 @@ public class BeastTracker : MonoBehaviour
     private void ResetState()
     {
         running = false;
+        retreatRoute.Clear();
+        retreatTarget = -1;
         lightExpiry.Clear();
         blocked.Clear();
         foreach (TrackerNode node in nodes)
@@ -352,8 +609,12 @@ public class BeastTracker : MonoBehaviour
 
     private void OnValidate()
     {
-        minimumMoveWait = Mathf.Max(0.1f, minimumMoveWait);
-        maximumMoveWait = Mathf.Max(minimumMoveWait, maximumMoveWait);
+        opportunityInterval = Mathf.Max(0.1f, opportunityInterval);
+        rollMax = Mathf.Max(1, rollMax);
+        aggression = Mathf.Max(0, aggression);
+        retreatSteps = Mathf.Max(0, retreatSteps);
+        skipNearestRetreatPoints = Mathf.Max(0, skipNearestRetreatPoints);
+        retreatStepTime = Mathf.Max(0.05f, retreatStepTime);
         lightDuration = Mathf.Max(0.1f, lightDuration);
         maximumActiveLights = Mathf.Max(1, maximumActiveLights);
     }
