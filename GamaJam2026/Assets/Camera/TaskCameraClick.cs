@@ -9,6 +9,7 @@ public class TaskCameraClick : MonoBehaviour
 
     [Tooltip("Optional 2D minigame root shown once the camera has finished moving in.")]
     [SerializeField] private GameObject minigame;
+    [SerializeField] private MicroscopeTaskVisibilityController taskVisibilityController;
 
     private void OnMouseDown()
     {
@@ -20,6 +21,11 @@ public class TaskCameraClick : MonoBehaviour
         }
 
         if (cameraManager != null)
-            cameraManager.ShowTaskCamera(taskCamera, minigame);
+        {
+            if (taskVisibilityController != null)
+                cameraManager.ShowTaskCamera(taskCamera, taskVisibilityController);
+            else
+                cameraManager.ShowTaskCamera(taskCamera, minigame);
+        }
     }
 }

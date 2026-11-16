@@ -10,6 +10,7 @@ public class MicroscopeTaskController : MonoBehaviour
     [FormerlySerializedAs("focusPopup")]
     [SerializeField] private GameObject microscopeTaskPanel;
     [SerializeField] private GameObject explorationUI;
+    [SerializeField] private CameraViewManager cameraViewManager;
 
     [Header("Focus")]
     public Slider focusSlider;
@@ -261,12 +262,14 @@ public class MicroscopeTaskController : MonoBehaviour
         SetFocusStatus("Analysis complete!");
         if (microscopeTaskPanel != null)
             microscopeTaskPanel.SetActive(false);
+        if (explorationUI != null)
+            explorationUI.SetActive(false);
         Debug.Log("Microscope task completed!");
 
-        if (explorationUI != null)
-            explorationUI.SetActive(true);
+        if (cameraViewManager != null)
+            cameraViewManager.CompleteCurrentTask();
         else
-            Debug.LogWarning("Assign an Exploration UI.", this);
+            Debug.LogWarning("Assign a Camera View Manager to close the task after completion.", this);
     }
 
     private void ShowFocusWarning()

@@ -9,16 +9,17 @@ public class CameraViewManager : MonoBehaviour
     [SerializeField] private GameObject backButton;
 
     private CinemachineVirtualCamera currentTaskCamera;
+    private GameObject currentMinigame;
+    private MicroscopeTaskVisibilityController currentTaskVisibilityController;
+    private Coroutine openMinigameRoutine;
     private CinemachinePOV roomPOV;
+    private bool locked;
 
     private GameObject currentMinigame;
     private Coroutine openMinigameRoutine;
 
     private string horizontalInputName;
     private string verticalInputName;
-
-    // Set by LockToCamera (e.g. the death sequence); blocks all camera changes.
-    private bool locked;
 
     public bool IsInTask => currentTaskCamera != null;
 
@@ -27,7 +28,6 @@ public class CameraViewManager : MonoBehaviour
         if (!locked && Input.GetKeyDown(KeyCode.Alpha1))
         {
             ReturnToRoom();
-        }
     }
 
     private void Awake()
@@ -48,12 +48,26 @@ public class CameraViewManager : MonoBehaviour
 
     public void ShowTaskCamera(CinemachineVirtualCamera taskCamera)
     {
-        ShowTaskCamera(taskCamera, null);
+        ShowTaskCamera(taskCamera, (GameObject)null);
     }
 
     public void ShowTaskCamera(CinemachineVirtualCamera taskCamera, GameObject minigame)
     {
-        // Only enter tasks from the room view.
+        ShowTaskCamera(taskCamera, minigame, null);
+    }
+
+    public void ShowTaskCamera(
+        CinemachineVirtualCamera taskCamera,
+        MicroscopeTaskVisibilityController taskVisibilityController)
+    {
+        ShowTaskCamera(taskCamera, null, taskVisibilityController);
+    }
+
+    private void ShowTaskCamera(
+        CinemachineVirtualCamera taskCamera,
+        GameObject minigame,
+        MicroscopeTaskVisibilityController taskVisibilityController)
+    {
         if (locked || currentTaskCamera != null)
             return;
 
@@ -63,35 +77,53 @@ public class CameraViewManager : MonoBehaviour
         if (brain != null && brain.IsBlending)
             return;
 
+        if (taskVisibilityController != null && taskVisibilityController.IsCompleted)
+            return;
+
         SetRoomLookEnabled(false);
 
         currentTaskCamera = taskCamera;
+        currentMinigame = minigame;
+        currentTaskVisibilityController = taskVisibilityController;
         currentTaskCamera.Priority = 20;
 
         if (backButton != null)
             backButton.SetActive(true);
 
-        if (minigame != null)
-        {
-            currentMinigame = minigame;
-            openMinigameRoutine = StartCoroutine(OpenMinigameAfterBlend(minigame));
-        }
+        if (minigame != null || taskVisibilityController != null)
+            openMinigameRoutine =
+                StartCoroutine(OpenMinigameAfterBlend(minigame, taskVisibilityController));
     }
 
-    private IEnumerator OpenMinigameAfterBlend(GameObject minigame)
+    private IEnumerator OpenMinigameAfterBlend(
+        GameObject minigame,
+        MicroscopeTaskVisibilityController taskVisibilityController)
     {
-        // The brain only starts the blend on its next update, so wait a frame first.
+        // The brain starts the blend on its next update, so wait a frame first.
         yield return null;
 
         while (brain != null && brain.IsBlending)
             yield return null;
 
-        minigame.SetActive(true);
+        if (currentTaskCamera == null || locked)
+        {
+            openMinigameRoutine = null;
+            yield break;
+        }
+
+        if (taskVisibilityController != null && !taskVisibilityController.ShowTask())
+        {
+            openMinigameRoutine = null;
+            ReturnToRoom();
+            yield break;
+        }
+
+        if (minigame != null)
+            minigame.SetActive(true);
+
         openMinigameRoutine = null;
     }
 
-    // Forces the view to this camera from any state (room, another task, mid-blend)
-    // and keeps it there: no back button, no look, no other tasks.
     public void LockToCamera(CinemachineVirtualCamera camera)
     {
         locked = true;
@@ -126,12 +158,26 @@ public class CameraViewManager : MonoBehaviour
             backButton.SetActive(false);
     }
 
+    public void CompleteCurrentTask()
+    {
+        if (currentTaskVisibilityController != null)
+            currentTaskVisibilityController.MarkCompleted();
+
+        ReturnToRoom();
+    }
+
     private void CloseMinigame()
     {
         if (openMinigameRoutine != null)
         {
             StopCoroutine(openMinigameRoutine);
             openMinigameRoutine = null;
+        }
+
+        if (currentTaskVisibilityController != null)
+        {
+            currentTaskVisibilityController.HideTask();
+            currentTaskVisibilityController = null;
         }
 
         if (currentMinigame != null)
