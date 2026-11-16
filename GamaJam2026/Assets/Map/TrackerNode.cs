@@ -27,6 +27,8 @@ public class TrackerNode : MonoBehaviour
     [SerializeField, Min(0f)] private float emissionIntensity = 2f;
     [Tooltip("Optional actual light to turn on at this location.")]
     [SerializeField] private Light roomLight;
+    [Tooltip("Enabled while the beast is on this node, disabled otherwise.")]
+    [SerializeField] private GameObject[] beastPresentObjects = new GameObject[0];
 
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -120,6 +122,14 @@ public class TrackerNode : MonoBehaviour
     public void SetBeastPresent(bool present)
     {
         HasBeast = present;
+        if (beastPresentObjects != null)
+        {
+            foreach (GameObject obj in beastPresentObjects)
+            {
+                if (obj != null)
+                    obj.SetActive(present);
+            }
+        }
         UpdateAppearance();
     }
 

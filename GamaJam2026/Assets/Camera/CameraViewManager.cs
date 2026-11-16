@@ -1,3 +1,4 @@
+using System.Collections;
 using Cinemachine;
 using UnityEngine;
 
@@ -10,12 +11,20 @@ public class CameraViewManager : MonoBehaviour
     private CinemachineVirtualCamera currentTaskCamera;
     private CinemachinePOV roomPOV;
 
+    private GameObject currentMinigame;
+    private Coroutine openMinigameRoutine;
+
     private string horizontalInputName;
     private string verticalInputName;
 
+    // Set by LockToCamera (e.g. the death sequence); blocks all camera changes.
+    private bool locked;
+
+    public bool IsInTask => currentTaskCamera != null;
+
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        if (!locked && Input.GetKeyDown(KeyCode.Alpha1))
         {
             ReturnToRoom();
         }
@@ -39,8 +48,13 @@ public class CameraViewManager : MonoBehaviour
 
     public void ShowTaskCamera(CinemachineVirtualCamera taskCamera)
     {
+        ShowTaskCamera(taskCamera, null);
+    }
+
+    public void ShowTaskCamera(CinemachineVirtualCamera taskCamera, GameObject minigame)
+    {
         // Only enter tasks from the room view.
-        if (currentTaskCamera != null)
+        if (locked || currentTaskCamera != null)
             return;
 
         if (taskCamera == null || taskCamera == roomCamera)
@@ -56,12 +70,51 @@ public class CameraViewManager : MonoBehaviour
 
         if (backButton != null)
             backButton.SetActive(true);
+
+        if (minigame != null)
+        {
+            currentMinigame = minigame;
+            openMinigameRoutine = StartCoroutine(OpenMinigameAfterBlend(minigame));
+        }
+    }
+
+    private IEnumerator OpenMinigameAfterBlend(GameObject minigame)
+    {
+        // The brain only starts the blend on its next update, so wait a frame first.
+        yield return null;
+
+        while (brain != null && brain.IsBlending)
+            yield return null;
+
+        minigame.SetActive(true);
+        openMinigameRoutine = null;
+    }
+
+    // Forces the view to this camera from any state (room, another task, mid-blend)
+    // and keeps it there: no back button, no look, no other tasks.
+    public void LockToCamera(CinemachineVirtualCamera camera)
+    {
+        locked = true;
+        CloseMinigame();
+        SetRoomLookEnabled(false);
+
+        if (backButton != null)
+            backButton.SetActive(false);
+
+        if (currentTaskCamera != null && currentTaskCamera != camera)
+            currentTaskCamera.Priority = 0;
+
+        currentTaskCamera = camera;
+        if (camera != null)
+            camera.Priority = 20;
     }
 
     public void ReturnToRoom()
     {
-        if (currentTaskCamera == null)
+        if (locked || currentTaskCamera == null)
             return;
+
+        CloseMinigame();
 
         // RoomCamera's priority of 10 now wins again.
         currentTaskCamera.Priority = 0;
@@ -71,6 +124,21 @@ public class CameraViewManager : MonoBehaviour
 
         if (backButton != null)
             backButton.SetActive(false);
+    }
+
+    private void CloseMinigame()
+    {
+        if (openMinigameRoutine != null)
+        {
+            StopCoroutine(openMinigameRoutine);
+            openMinigameRoutine = null;
+        }
+
+        if (currentMinigame != null)
+        {
+            currentMinigame.SetActive(false);
+            currentMinigame = null;
+        }
     }
 
     private void SetRoomLookEnabled(bool allowLook)

@@ -694,7 +694,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: GAME NAME
+  m_text: Tenebrous
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 28a25e0b26d49b34fb0e98b67781c284, type: 2}
   m_sharedMaterial: {fileID: -1102245805482565094, guid: 28a25e0b26d49b34fb0e98b67781c284,
@@ -948,7 +948,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: --Button--
+  m_text: --Start--
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 28a25e0b26d49b34fb0e98b67781c284, type: 2}
   m_sharedMaterial: {fileID: -1102245805482565094, guid: 28a25e0b26d49b34fb0e98b67781c284,

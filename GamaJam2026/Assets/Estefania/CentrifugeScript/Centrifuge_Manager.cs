@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 public class Centrifuge_Manager : MonoBehaviour
@@ -14,9 +15,22 @@ public class Centrifuge_Manager : MonoBehaviour
     public float snapDistance = 1f;
 
     public float orbitSpeed = 800f;  
-    public float speedUp = 300f;  
+    public float speedUp = 300f;
+
+    [Header("Embedding in the 3D map")]
+    public Camera minigameCamera;          // orthographic camera that renders this minigame
+    public float spinDuration = 3f;        // seconds of spinning before the task counts as done
+    public UnityEvent onCompleted;         // e.g. mark task done / return to room
+
+    [Header("Progress")]
+    public ProgressManager progressManager;          // auto-found if left empty
+    public double progressAmount = 100.0 / 3.0;      // 1/3 of the cure bar
+
+    public bool Completed { get; private set; }
 
     Tube[] occupant;
+    float spinTimer = 0f;
+    double progressGiven = 0.0;
 
     bool spinning = false;
     float currentSpeed = 40f;
@@ -28,6 +42,11 @@ public class Centrifuge_Manager : MonoBehaviour
     void Awake()
     {
         occupant = new Tube[slots.Length];
+
+        // When embedded as a prefab, use the camera that lives inside the prefab.
+        // (In the standalone Centrifuge scene there is none, so Camera.main is used.)
+        if (minigameCamera == null && transform.parent != null)
+            minigameCamera = transform.root.GetComponentInChildren<Camera>(true);
     }
 
     void Start()
@@ -117,6 +136,9 @@ public class Centrifuge_Manager : MonoBehaviour
 
     public void StartCentrifuge()
     {
+        // The button's onClick and our own click check could both fire; only start once.
+        if (spinning) return;
+
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
         foreach (Transform s in slots)
@@ -145,14 +167,109 @@ public class Centrifuge_Manager : MonoBehaviour
         spinAngle = 0f;
         currentSpeed = 0f;
         startButton.interactable = false;
+        spinTimer = 0f;
+        progressGiven = 0.0;
         spinning = true;
+
+        if (progressManager == null)
+            progressManager = FindObjectOfType<ProgressManager>();
+        if (progressManager == null)
+            Debug.LogWarning("Centrifuge_Manager: no ProgressManager found in scene.");
+    }
+
+    Tube dragging;
+
+    Camera InputCamera()
+    {
+        return minigameCamera != null ? minigameCamera : Camera.main;
+    }
+
+    bool StartButtonUnderMouse()
+    {
+        if (startButton == null || !startButton.interactable || !startButton.gameObject.activeInHierarchy)
+            return false;
+
+        Canvas canvas = startButton.GetComponentInParent<Canvas>();
+        Camera uiCam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            ? canvas.worldCamera
+            : null;
+
+        return RectTransformUtility.RectangleContainsScreenPoint(
+            (RectTransform)startButton.transform, Input.mousePosition, uiCam);
+    }
+
+    void HandleTubeInput()
+    {
+        Camera cam = InputCamera();
+        if (cam == null) return;
+
+        if (Input.GetMouseButtonDown(0) && StartButtonUnderMouse())
+        {
+            // Handle the start button ourselves so other UI in the map can't swallow the click.
+            StartCentrifuge();
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            Vector2 p = cam.ScreenToWorldPoint(Input.mousePosition);
+            foreach (Collider2D c in Physics2D.OverlapPointAll(p))
+            {
+                Tube t = c.GetComponent<Tube>();
+                if (t != null && !t.locked && System.Array.IndexOf(tubes, t) >= 0)
+                {
+                    dragging = t;
+                    t.BeginDrag();
+                    break;
+                }
+            }
+        }
+
+        if (dragging == null) return;
+
+        if (Input.GetMouseButton(0))
+            dragging.Drag();
+
+        if (Input.GetMouseButtonUp(0))
+        {
+            dragging.EndDrag();
+            dragging = null;
+        }
     }
 
     void Update()
     {
+        HandleTubeInput();
+
         if (!spinning) return;
 
-        currentSpeed = Mathf.MoveTowards(currentSpeed, orbitSpeed, speedUp * Time.deltaTime);
+        if (!Completed)
+        {
+            spinTimer += Time.deltaTime;
+
+            // Fill the progress bar gradually while spinning, reaching exactly progressAmount at the end.
+            double target = progressAmount * Mathf.Clamp01(spinTimer / spinDuration);
+            if (progressManager != null && target > progressGiven)
+            {
+                progressManager.AddProgress(target - progressGiven);
+                progressGiven = target;
+            }
+
+            if (spinTimer >= spinDuration)
+            {
+                Completed = true;
+                onCompleted?.Invoke();
+            }
+        }
+
+        // Spin up while running, then slow down to a stop once the time is up.
+        float targetSpeed = Completed ? 0f : orbitSpeed;
+        currentSpeed = Mathf.MoveTowards(currentSpeed, targetSpeed, speedUp * Time.deltaTime);
+        if (Completed && currentSpeed <= 0f)
+        {
+            spinning = false;
+            return;
+        }
         spinAngle += currentSpeed * Time.deltaTime;
 
         float r = spinAngle * Mathf.Deg2Rad;

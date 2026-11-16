@@ -73,25 +73,24 @@ public class Tube : MonoBehaviour
         }
     }
 
-    void OnMouseDown()
+    // Called by Centrifuge_Manager, which raycasts through the minigame camera.
+    // (OnMouseDown doesn't work reliably when this is drawn by a stacked overlay camera.)
+    public void BeginDrag()
     {
         if (locked) return;
-
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
 
         grabbed = true;
         ShowAsVial();
         offset = transform.position - MouseWorld();
     }
 
-    void OnMouseDrag()
+    public void Drag()
     {
         if (locked || !grabbed) return;
         transform.position = MouseWorld() + offset;
     }
 
-    void OnMouseUp()
+    public void EndDrag()
     {
         if (locked || !grabbed) return;
         grabbed = false;
@@ -106,7 +105,11 @@ public class Tube : MonoBehaviour
 
     Vector3 MouseWorld()
     {
-        Vector3 p = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        // Use the minigame's own 2D camera, not the 3D room camera.
+        Camera cam = (manager != null && manager.minigameCamera != null)
+            ? manager.minigameCamera
+            : Camera.main;
+        Vector3 p = cam.ScreenToWorldPoint(Input.mousePosition);
         p.z = 0f;
         return p;
     }

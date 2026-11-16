@@ -57,6 +57,15 @@ public class BeastTracker : MonoBehaviour
     [Tooltip("World-space offset from each node position, for placing dots above the drawing.")]
     [SerializeField] private Vector3 markerOffset = Vector3.zero;
 
+    [Header("Audio")]
+    [Tooltip("Plays the movement cues. If empty, one is added to this object.")]
+    [SerializeField] private AudioSource audioSource;
+    [Tooltip("Played each time the beast moves to a new room while hunting.")]
+    [SerializeField] private AudioClip moveSound;
+    [Tooltip("Optional. Played each room while fleeing. Falls back to Move Sound if empty.")]
+    [SerializeField] private AudioClip retreatSound;
+    [SerializeField, Range(0f, 1f)] private float moveVolume = 1f;
+
     [Header("Camera interaction")]
     [Tooltip("Turn off only when testing nodes before the tracker camera is set up.")]
     [SerializeField] private bool requireTrackerView = true;
@@ -346,6 +355,7 @@ public class BeastTracker : MonoBehaviour
             return; // Already at the player.
 
         SetCurrentNode(nodes[path[1]]);
+        PlayMoveSound(moveSound);
         if (currentNode == playerNode)
         {
             running = false;
@@ -466,6 +476,7 @@ public class BeastTracker : MonoBehaviour
         int next = retreatRoute[0];
         retreatRoute.RemoveAt(0);
         SetCurrentNode(nodes[next]);
+        PlayMoveSound(retreatSound != null ? retreatSound : moveSound);
 
         if (retreatRoute.Count == 0)
             EndRetreat();
@@ -532,6 +543,18 @@ public class BeastTracker : MonoBehaviour
             beastMarker.position = currentNode.transform.position + markerOffset;
         if (playerMarker != null)
             playerMarker.position = playerNode.transform.position + markerOffset;
+    }
+
+    private void PlayMoveSound(AudioClip clip)
+    {
+        if (clip == null)
+            return;
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+        }
+        audioSource.PlayOneShot(clip, moveVolume);
     }
 
     private void SetCurrentNode(TrackerNode newNode)
