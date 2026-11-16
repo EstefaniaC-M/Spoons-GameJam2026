@@ -6,6 +6,7 @@ public class TaskCameraClick : MonoBehaviour
 {
     [SerializeField] private CameraViewManager cameraManager;
     [SerializeField] private CinemachineVirtualCamera taskCamera;
+    [SerializeField] private MicroscopeTaskVisibilityController taskVisibilityController;
 
     private void OnMouseDown()
     {
@@ -17,6 +18,6 @@ public class TaskCameraClick : MonoBehaviour
         }
 
         if (cameraManager != null)
-            cameraManager.ShowTaskCamera(taskCamera);
+            cameraManager.ShowTaskCamera(taskCamera, taskVisibilityController);
     }
 }

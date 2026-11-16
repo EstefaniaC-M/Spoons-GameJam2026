@@ -26392,6 +26392,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cameraManager: {fileID: 528411111}
   taskCamera: {fileID: 719724968}
+  taskVisibilityController: {fileID: 899712505}
 --- !u!114 &899712505
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -26650,6 +26651,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   microscopeTaskPanel: {fileID: 1494714161}
   explorationUI: {fileID: 793353673}
+  cameraViewManager: {fileID: 528411111}
   focusSlider: {fileID: 795085971}
   focusStatus: {fileID: 1815631307}
   resistanceStart: 50

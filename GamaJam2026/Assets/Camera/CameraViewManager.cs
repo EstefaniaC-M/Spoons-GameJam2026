@@ -8,6 +8,7 @@ public class CameraViewManager : MonoBehaviour
     [SerializeField] private GameObject backButton;
 
     private CinemachineVirtualCamera currentTaskCamera;
+    private MicroscopeTaskVisibilityController currentTaskVisibilityController;
     private CinemachinePOV roomPOV;
 
     private string horizontalInputName;
@@ -39,6 +40,13 @@ public class CameraViewManager : MonoBehaviour
 
     public void ShowTaskCamera(CinemachineVirtualCamera taskCamera)
     {
+        ShowTaskCamera(taskCamera, null);
+    }
+
+    public void ShowTaskCamera(
+        CinemachineVirtualCamera taskCamera,
+        MicroscopeTaskVisibilityController taskVisibilityController)
+    {
         // Only enter tasks from the room view.
         if (currentTaskCamera != null)
             return;
@@ -49,9 +57,13 @@ public class CameraViewManager : MonoBehaviour
         if (brain != null && brain.IsBlending)
             return;
 
+        if (taskVisibilityController != null && !taskVisibilityController.ShowTask())
+            return;
+
         SetRoomLookEnabled(false);
 
         currentTaskCamera = taskCamera;
+        currentTaskVisibilityController = taskVisibilityController;
         currentTaskCamera.Priority = 20;
 
         if (backButton != null)
@@ -66,11 +78,24 @@ public class CameraViewManager : MonoBehaviour
         // RoomCamera's priority of 10 now wins again.
         currentTaskCamera.Priority = 0;
         currentTaskCamera = null;
+        if (currentTaskVisibilityController != null)
+        {
+            currentTaskVisibilityController.HideTask();
+            currentTaskVisibilityController = null;
+        }
 
         SetRoomLookEnabled(true);
 
         if (backButton != null)
             backButton.SetActive(false);
+    }
+
+    public void CompleteCurrentTask()
+    {
+        if (currentTaskVisibilityController != null)
+            currentTaskVisibilityController.MarkCompleted();
+
+        ReturnToRoom();
     }
 
     private void SetRoomLookEnabled(bool allowLook)

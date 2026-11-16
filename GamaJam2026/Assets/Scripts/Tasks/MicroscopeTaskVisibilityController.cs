@@ -1,10 +1,9 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 
-[RequireComponent(typeof(Collider))]
 public class MicroscopeTaskVisibilityController : MonoBehaviour
 {
     [SerializeField] private GameObject taskObjectsRoot;
+    private bool taskCompleted;
 
     private void Awake()
     {
@@ -23,26 +22,24 @@ public class MicroscopeTaskVisibilityController : MonoBehaviour
         taskObjectsRoot.SetActive(false);
     }
 
-    private void OnMouseDown()
+    public bool ShowTask()
     {
-        if (EventSystem.current != null &&
-            EventSystem.current.IsPointerOverGameObject())
-        {
-            return;
-        }
+        if (taskCompleted || taskObjectsRoot == null)
+            return false;
 
-        ShowTask();
-    }
-
-    public void ShowTask()
-    {
-        if (taskObjectsRoot != null)
-            taskObjectsRoot.SetActive(true);
+        taskObjectsRoot.SetActive(true);
+        return true;
     }
 
     public void HideTask()
     {
         if (taskObjectsRoot != null)
             taskObjectsRoot.SetActive(false);
+    }
+
+    public void MarkCompleted()
+    {
+        taskCompleted = true;
+        HideTask();
     }
 }
