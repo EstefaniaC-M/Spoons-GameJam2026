@@ -5,6 +5,8 @@ public class MicroscopeTaskVisibilityController : MonoBehaviour
     [SerializeField] private GameObject taskObjectsRoot;
     private bool taskCompleted;
 
+    public bool IsCompleted => taskCompleted;
+
     private void Awake()
     {
         if (taskObjectsRoot == null)
